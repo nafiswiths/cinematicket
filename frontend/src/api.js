@@ -86,6 +86,24 @@ export const api = {
     });
   },
 
+  sendOtp(bookingRef, phone) {
+    return jsonFetch(this.url('/api/otp/send'), {
+      method: 'POST',
+      body: JSON.stringify({ ref: bookingRef, phone }),
+    });
+  },
+
+  verifyOtp(bookingRef, code) {
+    return jsonFetch(this.url('/api/otp/verify'), {
+      method: 'POST',
+      body: JSON.stringify({ ref: bookingRef, code }),
+    });
+  },
+
+  getOtpForBooking(bookingRef) {
+    return jsonFetch(this.url(`/api/otp/booking/${bookingRef}`));
+  },
+
   getHealth() {
     return jsonFetch(this.url('/health'));
   },

@@ -33,6 +33,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ShowSeatRepository showSeatRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentEventRepository paymentEventRepository;
+    private final OtpCodeRepository otpCodeRepository;
     private final GatewayClient gatewayClient;
     private final BookingStateService bookingStateService;
     private final HmacUtil hmacUtil;
@@ -43,6 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
                               ShowSeatRepository showSeatRepository,
                               PaymentRepository paymentRepository,
                               PaymentEventRepository paymentEventRepository,
+                              OtpCodeRepository otpCodeRepository,
                               GatewayClient gatewayClient,
                               BookingStateService bookingStateService,
                               HmacUtil hmacUtil,
@@ -52,6 +54,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.showSeatRepository = showSeatRepository;
         this.paymentRepository = paymentRepository;
         this.paymentEventRepository = paymentEventRepository;
+        this.otpCodeRepository = otpCodeRepository;
         this.gatewayClient = gatewayClient;
         this.bookingStateService = bookingStateService;
         this.hmacUtil = hmacUtil;
@@ -233,7 +236,25 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    @Transactional
     public OtpVerifyResponse verifyOtp(OtpVerifyRequest req) {
-        return gatewayClient.otpVerify(req);
+        OtpVerifyResponse response = gatewayClient.otpVerify(req);
+        // Track attempts so we can show the user how many tries they have left
+        // (the gateway locks out after 5 attempts).
+        if (req.getRef() != null) {
+            otpCodeRepository.findByBookingRef(req.getRef()).ifPresent(otp -> {
+                otp.setAttempts(otp.getAttempts() + 1);
+                if (response != null && response.isVerified()) {
+                    otp.setVerified(true);
+                }
+                otpCodeRepository.save(otp);
+            });
+        }
+        return response;
+    }
+
+    @Override
+    public Optional<OtpCode> getOtpForBooking(String bookingRef) {
+        return otpCodeRepository.findByBookingRef(bookingRef);
     }
 }

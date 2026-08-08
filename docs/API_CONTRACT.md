@@ -378,9 +378,20 @@ Request:
 }
 ```
 
-The backend forwards the request to the provided gateway.
+The backend forwards the request to the provided gateway with a `callback_url`
+pointing at `/api/webhooks/otp`. The gateway may silently fail to deliver an OTP
+(~10% drop rate). Successful delivery arrives asynchronously at the webhook,
+not synchronously from this call.
 
-The gateway may silently fail to deliver an OTP.
+Successful response:
+
+```http
+200 OK
+```
+
+```json
+{ "ok": true, "session_ref": "sess_..." }
+```
 
 ---
 
@@ -400,18 +411,78 @@ Request:
 Example response:
 
 ```json
+{ "verified": true }
+```
+
+The provided gateway uses `123456` in deterministic mode. After 5 wrong
+attempts the gateway returns HTTP 429.
+
+---
+
+# 10a. OTP Status (poll after send)
+
+## GET `/api/otp/booking/{bookingRef}`
+
+Returns the OTP record the gateway has delivered for this booking, if any.
+The frontend polls this every ~2s after `/api/otp/send` until a code shows up
+(the gateway may delay 2-15s and silently drop ~10%).
+
+### Found
+
+```http
+200 OK
+```
+
+```json
 {
-  "verified": true
+  "bookingRef": "BK-001",
+  "phone": "01700000000",
+  "code": "482913",
+  "verified": false,
+  "attempts": 0,
+  "deliveredAt": "2026-08-08T11:03:25.418Z"
 }
 ```
 
-The provided gateway uses:
+### Not yet delivered
 
-```text
-123456
+```http
+404 Not Found
 ```
 
-in deterministic mode.
+```json
+{ "error": "OTP_NOT_DELIVERED", "message": "..." }
+```
+
+---
+
+# 10b. OTP Webhook (gateway → backend)
+
+## POST `/api/webhooks/otp`
+
+Called by the provided gateway to deliver the OTP code asynchronously.
+
+Body:
+
+```json
+{
+  "event_id": "evt_9f2a...",
+  "ref": "BK-001",
+  "phone": "01700000000",
+  "code": "482913",
+  "timestamp": "2026-08-08T11:03:25.418Z"
+}
+```
+
+### Response
+
+```http
+200 OK
+```
+
+Duplicate deliveries carry the same `event_id`; the backend must dedupe and
+return 200. Always return 2xx — the gateway treats non-2xx as delivery
+failure and retries with exponential backoff (up to 8 times).
 
 ---
 

@@ -7,6 +7,8 @@ import com.cinemaseat.payment.dto.OtpVerifyRequest;
 import com.cinemaseat.payment.dto.OtpVerifyResponse;
 import com.cinemaseat.payment.dto.RefundResponse;
 
+import java.util.Optional;
+
 public interface PaymentService {
 
     Payment initiatePayment(String bookingRef);
@@ -25,4 +27,11 @@ public interface PaymentService {
     OtpSendResponse sendOtp(OtpSendRequest req);
 
     OtpVerifyResponse verifyOtp(OtpVerifyRequest req);
+
+    /**
+     * Returns the OTP code (if any) that the gateway has delivered to the
+     * /api/webhooks/otp callback for the given booking. Used by the frontend
+     * to display the code back to the user.
+     */
+    Optional<OtpCode> getOtpForBooking(String bookingRef);
 }

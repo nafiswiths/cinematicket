@@ -36,6 +36,7 @@ class PaymentServiceTest {
     @Mock ShowSeatRepository showSeatRepository;
     @Mock PaymentRepository paymentRepository;
     @Mock PaymentEventRepository paymentEventRepository;
+    @Mock OtpCodeRepository otpCodeRepository;
     @Mock GatewayClient gatewayClient;
     @Mock BookingStateService bookingStateService;
 
@@ -56,6 +57,7 @@ class PaymentServiceTest {
                 showSeatRepository,
                 paymentRepository,
                 paymentEventRepository,
+                otpCodeRepository,
                 gatewayClient,
                 bookingStateService,
                 hmacUtil,

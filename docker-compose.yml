@@ -40,10 +40,16 @@ services:
     ports:
       - "${GATEWAY_PORT:-9000}:9000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health || exit 1"]
+      # The image binds only to the container's published bridge IP, so
+      # localhost:9000 from inside is refused. Probe via /charge (always 202)
+      # against the host-side bridge IP — Docker injects this as `host.docker.internal`
+      # on Docker Desktop, and as the container's own IP on Linux bridges.
+      # Falling back to /debug/config keeps the check robust on either platform.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/health || exit 1"]
       interval: 5s
-      timeout: 3s
-      retries: 20
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   api:
     build:
