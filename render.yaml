@@ -6,6 +6,10 @@
 #   1. Push this repo to GitHub.
 #   2. In Render: New -> Blueprint -> point at this repo.
 #   3. Render reads this file and provisions everything below.
+#
+# Env-var names below match what backend/src/main/resources/application.yml reads:
+#   DATABASE_URL, POSTGRES_USER, POSTGRES_PASSWORD, GATEWAY_URL, GATEWAY_SECRET,
+#   HOLD_TTL_SECONDS, API_PORT, CALLBACK_URL.
 
 services:
   # ---- Database ----------------------------------------------------------
@@ -21,10 +25,6 @@ services:
         value: cinemaseat
       - key: POSTGRES_PASSWORD
         generateValue: true         # Render generates and stores it
-      - key: DATABASE_URL
-        fromDatabase:
-          name: cinemaseat-postgres
-          property: connectionString
 
   # ---- Mock payment/OTP gateway -----------------------------------------
   # We run the same official image Render allows. It is internal (no
@@ -40,6 +40,8 @@ services:
     healthCheckPath: /health
 
   # ---- Backend (Spring Boot) --------------------------------------------
+  # Spring Boot reads env vars directly via application.yml's ${...} defaults.
+  # No separate "render" profile is needed — every setting is parameterized.
   - type: pserv
     name: cinemaseat-api
     plan: starter
@@ -50,25 +52,30 @@ services:
       context: .
     healthCheckPath: /health
     envVars:
-      # Spring Boot will read these via application-render.yml
-      - key: SPRING_PROFILES_ACTIVE
-        value: render
-      - key: DB_URL
-        fromService:
-          type: pserv
+      - key: DATABASE_URL
+        fromDatabase:
           name: cinemaseat-postgres
           property: connectionString
-      - key: DB_USER
+      - key: POSTGRES_DB
         value: cinemaseat
-      - key: DB_PASSWORD
+      - key: POSTGRES_USER
+        value: cinemaseat
+      - key: POSTGRES_PASSWORD
         fromService:
           type: pserv
           name: cinemaseat-postgres
           property: password
-      - key: GATEWAY_BASE_URL
+      - key: HOLD_TTL_SECONDS
+        value: 120
+      - key: GATEWAY_URL
         value: http://cinemaseat-gateway:9000
       - key: GATEWAY_SECRET
         value: z2p-2026-secret
+      - key: API_PORT
+        value: 8080
+      # The gateway must reach us by service name + port.
+      - key: CALLBACK_URL
+        value: http://cinemaseat-api:8080/api/payments/callback
 
   # ---- Frontend (React SPA + nginx) -------------------------------------
   - type: pserv
@@ -84,7 +91,7 @@ services:
         # API service. We don't bake the API URL into the bundle.
         VITE_API_BASE_URL: /api
     envVars:
-      # Backend URL that nginx proxies to. Render private services are
-      # reachable at <service-name>.onrender.com from sibling services.
+      # Backend URL that nginx proxies to. The docker-entrypoint.sh in the
+      # frontend image substitutes this into nginx.conf at container start.
       - key: API_UPSTREAM
         value: http://cinemaseat-api:8080
