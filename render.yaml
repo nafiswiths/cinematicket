@@ -1,0 +1,90 @@
+# Render Blueprint — CinemaSeat
+# One file describes the entire stack: Postgres + Spring Boot API + React frontend
+# + mock gateway (kept on Render as a private service).
+#
+# To deploy:
+#   1. Push this repo to GitHub.
+#   2. In Render: New -> Blueprint -> point at this repo.
+#   3. Render reads this file and provisions everything below.
+
+services:
+  # ---- Database ----------------------------------------------------------
+  - type: pserv
+    name: cinemaseat-postgres
+    plan: starter
+    region: oregon
+    ipAllowList: []                 # only internal services can reach it
+    envVars:
+      - key: POSTGRES_DB
+        value: cinemaseat
+      - key: POSTGRES_USER
+        value: cinemaseat
+      - key: POSTGRES_PASSWORD
+        generateValue: true         # Render generates and stores it
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cinemaseat-postgres
+          property: connectionString
+
+  # ---- Mock payment/OTP gateway -----------------------------------------
+  # We run the same official image Render allows. It is internal (no
+  # external URL) and only the API talks to it.
+  - type: pserv
+    name: cinemaseat-gateway
+    plan: starter
+    region: oregon
+    ipAllowList: []
+    runtime: docker
+    docker:
+      image: asifmahmoud414/mock-gateway:latest
+    healthCheckPath: /health
+
+  # ---- Backend (Spring Boot) --------------------------------------------
+  - type: pserv
+    name: cinemaseat-api
+    plan: starter
+    region: oregon
+    runtime: docker
+    docker:
+      dockerfile: ./backend/Dockerfile
+      context: .
+    healthCheckPath: /health
+    envVars:
+      # Spring Boot will read these via application-render.yml
+      - key: SPRING_PROFILES_ACTIVE
+        value: render
+      - key: DB_URL
+        fromService:
+          type: pserv
+          name: cinemaseat-postgres
+          property: connectionString
+      - key: DB_USER
+        value: cinemaseat
+      - key: DB_PASSWORD
+        fromService:
+          type: pserv
+          name: cinemaseat-postgres
+          property: password
+      - key: GATEWAY_BASE_URL
+        value: http://cinemaseat-gateway:9000
+      - key: GATEWAY_SECRET
+        value: z2p-2026-secret
+
+  # ---- Frontend (React SPA + nginx) -------------------------------------
+  - type: pserv
+    name: cinemaseat-frontend
+    plan: starter
+    region: oregon
+    runtime: docker
+    docker:
+      dockerfile: ./frontend/Dockerfile
+      context: .
+      args:
+        # Same-origin path: nginx in this image reverse-proxies /api/* to the
+        # API service. We don't bake the API URL into the bundle.
+        VITE_API_BASE_URL: /api
+    envVars:
+      # Backend URL that nginx proxies to. Render private services are
+      # reachable at <service-name>.onrender.com from sibling services.
+      - key: API_UPSTREAM
+        value: http://cinemaseat-api:8080

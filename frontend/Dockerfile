@@ -16,8 +16,21 @@ RUN npm run build
 
 # --- Runtime stage: nginx serving the SPA + reverse-proxying /api to the backend ---
 FROM nginx:1.27-alpine AS runtime
+
+# Default upstream. Compose sets this to "api:8080" via docker-compose env;
+# Render sets it to "cinemaseat-api.onrender.com:80" via the blueprint.
+ENV API_UPSTREAM=api:8080
+
+# Render supports envsubst at startup through a custom entrypoint so the
+# ${API_UPSTREAM} placeholder in nginx.conf resolves to the runtime value.
+# We use a small entrypoint.sh that envsubs the config and then execs nginx.
+RUN apk add --no-cache bash
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+
 EXPOSE 80
-HEALTHCHECK --interval=15s --timeout=3s --retries=5 \
-  CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

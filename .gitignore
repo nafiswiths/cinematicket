@@ -23,3 +23,9 @@ backend/mvnw.cmd
 
 # --- Docker ---
 .puku/
+
+# --- Local debugging artifacts ---
+debug-bundle.js
+debug-index.html
+*-bundle.js
+debug-*.html

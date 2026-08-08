@@ -91,8 +91,11 @@ services:
       - api
     ports:
       - "${FRONTEND_PORT:-3000}:80"
-    # nginx serves the SPA and reverse-proxies /api/* to the backend service.
-    # This keeps the browser on the same origin and avoids CORS surprises.
+    environment:
+      # nginx template substitutes this into ${API_UPSTREAM} at container start.
+      # In Compose this is the docker-network DNS of the api service. In Render
+      # the blueprint overrides it with the API service's internal URL.
+      API_UPSTREAM: api:${API_PORT:-8080}
 
 volumes:
   postgres-data:
